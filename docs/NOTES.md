@@ -35,6 +35,21 @@ you understand the real architecture by rebuilding its core mechanics.
 | `change_approval` table + the scheduling gate | `sysapproval_approver` + CAB (Change Advisory Board) approval requirement | **Governance gate:** you cannot move a change forward without approval, and a single rejection blocks it even if others approved — this is the mechanism, not just policy |
 | `audit_log` table | `sys_audit` (platform-wide field-level audit) | Nothing changes silently — every transition, link, and approval decision is a permanent record. This is what makes ITSM data trustworthy for compliance/audit |
 | `change_ci` join table | `change_request_ci` | Changes affect *specific* CIs — this is what makes risk scoring and impact analysis possible in the first place |
+| `work_order` + `work_log` | Product/implementation-specific field/facilities work records | Work is not complete without execution evidence: labor, parts, observation, outcome |
+| `operational_insights()` | Performance Analytics / operational reporting | Aggregates repeat work, failure, labor and parts cost by CI |
+| `create_followup_from_insight()` | Flow Designer/custom automation | Converts evidence into new governed work and preserves source/parent lineage |
+
+### The closed-loop sentence
+
+"A ticket closing is not the operational outcome. The loop closes only when we
+capture what work consumed and achieved, learn from that evidence, create better
+follow-up work, preserve why it was created, and measure the next outcome."
+
+Real ServiceNow table names for work orders vary by product and implementation
+(Field Service Management, facilities/workplace operations, or a scoped app).
+Do not bluff a universal table name; lead with the platform pattern: records,
+CI relationships, workflows, execution evidence, Performance Analytics, and
+automation.
 
 ---
 

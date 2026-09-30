@@ -107,6 +107,48 @@ def get_change(db: Database, change_id: str) -> ChangeRequest | None:
         return _row_to_change(row) if row else None
 
 
+EDITABLE_FIELDS = {
+    "short_desc", "description", "reason", "category", "priority",
+    "requested_by", "assigned_to", "planned_start", "planned_end",
+    "implementation_plan", "test_plan", "backout_plan", "close_notes",
+}
+
+
+def update_fields(db: Database, change_id: str, actor: str, **fields) -> list[str]:
+    """Update whitelisted record fields and audit every value that changed.
+
+    This is the mini analogue of editing a ServiceNow change form: record
+    changes are persisted independently of workflow transitions, but remain
+    reconstructable through field-level audit history.
+    """
+    invalid = set(fields) - EDITABLE_FIELDS
+    if invalid:
+        raise ValueError(f"fields are not editable: {sorted(invalid)}")
+    if not fields:
+        return []
+    with db.conn() as c:
+        current = c.execute("SELECT * FROM change_request WHERE change_id=?", (change_id,)).fetchone()
+        if current is None:
+            raise ValueError(f"no such change {change_id}")
+        changed = [name for name, value in fields.items() if current[name] != value]
+        if changed:
+            assignments = ", ".join(f"{name}=?" for name in changed)
+            values = [fields[name] for name in changed]
+            c.execute(f"UPDATE change_request SET {assignments}, updated_at=? WHERE change_id=?",
+                      (*values, _now(), change_id))
+    for name in changed:
+        old = current[name]
+        _audit(db, change_id, actor, "field_change", f"{name}: {old!r} -> {fields[name]!r}")
+    return changed
+
+
+def change_record(db: Database, change_id: str) -> dict | None:
+    """Return the full change record for form/detail views."""
+    with db.conn() as c:
+        row = c.execute("SELECT * FROM change_request WHERE change_id=?", (change_id,)).fetchone()
+        return dict(row) if row else None
+
+
 def link_ci(db: Database, change_id: str, ci_id: str, actor: str) -> None:
     """Associate a CI with the change — ServiceNow's change_request_ci join,
     the record that lets impact/risk analysis know WHAT is being touched."""

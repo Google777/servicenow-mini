@@ -38,6 +38,9 @@ CREATE TABLE IF NOT EXISTS change_request (
     change_id       TEXT PRIMARY KEY,       -- e.g. "CHG0001000"
     short_desc      TEXT NOT NULL,
     description     TEXT DEFAULT '',
+    reason          TEXT DEFAULT '',
+    category        TEXT DEFAULT 'hardware',
+    priority        TEXT DEFAULT 'medium',
     change_type     TEXT NOT NULL DEFAULT 'normal',  -- standard | normal | emergency
     state           TEXT NOT NULL DEFAULT 'draft',
     risk            TEXT,                    -- low | moderate | high (set at assess)
@@ -46,6 +49,10 @@ CREATE TABLE IF NOT EXISTS change_request (
     assigned_to     TEXT,
     planned_start   TEXT,
     planned_end     TEXT,
+    implementation_plan TEXT DEFAULT '',
+    test_plan       TEXT DEFAULT '',
+    backout_plan    TEXT DEFAULT '',
+    close_notes     TEXT DEFAULT '',
     created_at      TEXT NOT NULL,
     updated_at      TEXT NOT NULL
 );
@@ -73,6 +80,40 @@ CREATE TABLE IF NOT EXISTS audit_log (
     event       TEXT NOT NULL,       -- e.g. "state_change", "approval", "ci_linked"
     detail      TEXT NOT NULL        -- human-readable, e.g. "draft -> assess"
 );
+
+-- Closed-loop operations: planned work -> execution evidence -> analytics -> follow-up work.
+CREATE TABLE IF NOT EXISTS work_order (
+    wo_id           TEXT PRIMARY KEY,
+    short_desc      TEXT NOT NULL,
+    ci_id           TEXT NOT NULL REFERENCES cmdb_ci(ci_id),
+    state           TEXT NOT NULL DEFAULT 'planned', -- planned|in_progress|complete|cancelled
+    priority        TEXT NOT NULL DEFAULT 'medium',
+    assigned_to     TEXT,
+    source_type     TEXT NOT NULL DEFAULT 'manual', -- manual|change|analytics
+    source_ref      TEXT,
+    parent_wo_id    TEXT REFERENCES work_order(wo_id),
+    opened_at       TEXT NOT NULL,
+    due_at          TEXT,
+    completed_at    TEXT,
+    outcome         TEXT, -- success|failed|follow_up_required
+    completion_notes TEXT DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS work_log (
+    log_id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    wo_id            TEXT NOT NULL REFERENCES work_order(wo_id),
+    at               TEXT NOT NULL,
+    technician       TEXT NOT NULL,
+    labor_minutes    INTEGER NOT NULL DEFAULT 0,
+    action            TEXT NOT NULL,
+    result            TEXT DEFAULT '',
+    part_number       TEXT,
+    part_description  TEXT,
+    part_quantity     REAL NOT NULL DEFAULT 0,
+    part_unit_cost    REAL NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_work_order_ci ON work_order(ci_id, state);
+CREATE INDEX IF NOT EXISTS idx_work_log_wo ON work_log(wo_id, at);
 """
 
 
@@ -95,3 +136,19 @@ class Database:
     def _init_schema(self) -> None:
         with self.conn() as c:
             c.executescript(SCHEMA)
+            # Lightweight forward migration for local demo databases created
+            # before the record-form fields were added. Streamlit sessions are
+            # ephemeral, but this keeps the CLI database compatible too.
+            columns = {r["name"] for r in c.execute("PRAGMA table_info(change_request)")}
+            additions = {
+                "reason": "TEXT DEFAULT ''",
+                "category": "TEXT DEFAULT 'hardware'",
+                "priority": "TEXT DEFAULT 'medium'",
+                "implementation_plan": "TEXT DEFAULT ''",
+                "test_plan": "TEXT DEFAULT ''",
+                "backout_plan": "TEXT DEFAULT ''",
+                "close_notes": "TEXT DEFAULT ''",
+            }
+            for name, ddl in additions.items():
+                if name not in columns:
+                    c.execute(f"ALTER TABLE change_request ADD COLUMN {name} {ddl}")

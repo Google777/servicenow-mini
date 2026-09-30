@@ -38,15 +38,37 @@ flowchart LR
 | Deterministic risk scorer | Change Risk Assessment | Explainable decision support |
 | `change_approval` gate | Approval records / CAB workflow | Scheduling cannot bypass authorization |
 | `audit_log` | `sys_audit`-style history | Who changed what, when, and why |
+| `work_order` + `work_log` | FSM/facilities work records and execution activity | Planned work, labor, parts, observations, outcomes |
+| `operational_insights()` | Performance Analytics / operational reporting | Repeat work, failure, labor and part-cost patterns by CI |
+| Analytics follow-up action | Flow Designer/custom automation | Insight becomes governed new work with source lineage |
 
-## Demo walkthrough (3 minutes)
+## The closed operational learning loop
+
+```text
+Work order → technician execution → labor + parts + observations + outcome
+     ↑                                                        │
+     └──── analytics-generated follow-up ← CI-level insight ──┘
+```
+
+The demo intentionally closes the loop rather than stopping at a completed ticket:
+1. **Plan:** a work order is linked to the CI and an operational/change source.
+2. **Execute:** technicians record time, parts, action, result and completion outcome.
+3. **Learn:** analytics aggregate repeat work, failed/follow-up outcomes, labor and parts cost by CI.
+4. **Act:** an operator creates a new follow-up work order from the insight; `source_ref` and `parent_wo_id` preserve why it exists.
+5. **Measure again:** that follow-up produces new execution evidence, allowing the recommendation to be evaluated rather than merely issued.
+
+In a real ServiceNow environment, the exact work-order tables depend on the licensed product and implementation (for example, Field Service Management, facilities/workplace operations, or a scoped application). The durable platform concepts are records, CI relationships, workflows, execution evidence, Performance Analytics, and Flow Designer/automation.
+
+## Demo walkthrough (5 minutes)
 
 1. Open **CMDB impact**, select `UPS-01`, and show downstream PDUs/servers.
 2. Open `CHG1000001` in **Change workflow**; it is deliberately parked in **Authorize** with a high risk score.
 3. Click **Move to Scheduled** before approval—the backend blocks the transition.
 4. Approve the pending CAB record, then schedule successfully.
-5. Open **Audit trail** and show that CI links, transitions, and decisions are reconstructable.
-6. Use **Reset deterministic demo** to return the session to its original state.
+5. Open **Work Orders** and inspect execution evidence: labor, parts, observations and outcome.
+6. Open **Operational Insights**; show repeat/failure analytics by CI and create a follow-up work order from the recommendation.
+7. Return to **Work Orders** and show the analytics source plus parent-work lineage.
+8. Use **Reset deterministic demo** to return the session to its original state.
 
 ## Why the governance belongs in the backend
 
